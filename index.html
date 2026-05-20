@@ -42,13 +42,11 @@
     .species-table th { background:#f0f0f0; padding:2px 5px; text-align:left; font-weight:600; }
     .species-table td { padding:2px 5px; border-top:1px solid #e0e0e0; }
     .species-table tr.dominant td { font-weight:700; }
-    #opacity-overlay { position:absolute; top:0; left:0; right:0; bottom:0; z-index:500; background:#fff; pointer-events:none; opacity:0.45; }
     @media (max-width:700px) { .panel { top:auto; right:8px; left:8px; bottom:8px; width:auto; max-height:48vh; overflow:auto; } .legend { left:8px; bottom:calc(48vh + 22px); } }
   </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="opacity-overlay"></div>
 <div class="panel">
   <h1>Wiek gatunków drzewostanu — Puszcza Knyszyńska</h1>
 
@@ -82,7 +80,6 @@ var allLoadedFeatures = [];
 var forestLayer = L.geoJSON(null, { renderer: L.canvas(), style: styleFeature }).addTo(map);
 var colorMode = "dominant";
 
-var overlayEl = document.getElementById("opacity-overlay");
 var statusEl = document.getElementById("status");
 var opacityInput = document.getElementById("opacity");
 var ageMinInput = document.getElementById("ageMin");
@@ -149,8 +146,10 @@ function styleFeature(feature) {
   var p = feature.properties || {};
   var show = shouldShow(p);
   var ac = getFeatureAgeAndColor(p);
+  // Cache visibility for fast opacity updates
+  feature._visible = show;
   return {
-    fillColor: ac.color, fillOpacity: show ? 0.85 : 0,
+    fillColor: ac.color, fillOpacity: show ? Number(opacityInput.value) : 0,
     color: ac.color, weight: 0.45, opacity: show ? 0.7 : 0
   };
 }
@@ -180,7 +179,17 @@ function updateStatus() {
   setStatus(label);
 }
 
-opacityInput.addEventListener("input", function() { overlayEl.style.opacity = 1 - Number(this.value); });
+opacityInput.addEventListener("input", function() {
+  var val = Number(this.value);
+  forestLayer.eachLayer(function(layer) {
+    var f = layer.feature;
+    if (f) {
+      layer.options.fillOpacity = f._visible ? val : 0;
+    }
+  });
+  var r = map._renderer;
+  if (r && r._redraw) r._redraw();
+});
 ageMinInput.addEventListener("input", rebuildLayer);
 ageMaxInput.addEventListener("input", rebuildLayer);
 showLpInput.addEventListener("change", rebuildLayer);
