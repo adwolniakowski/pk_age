@@ -241,17 +241,30 @@ opacityInput.addEventListener("input", function() {
     if (layer.feature) layer.setStyle({fillOpacity: val});
   });
 });
-ageMinInput.addEventListener("input", applyFilter);
-ageMaxInput.addEventListener("input", applyFilter);
-showLpInput.addEventListener("change", applyFilter);
-showNonLpInput.addEventListener("change", applyFilter);
+function updateOddzialFilter() { applyFilter(); restyleOddzialLayer(); }
+ageMinInput.addEventListener("input", updateOddzialFilter);
+ageMaxInput.addEventListener("input", updateOddzialFilter);
+showLpInput.addEventListener("change", updateOddzialFilter);
+showNonLpInput.addEventListener("change", updateOddzialFilter);
 function restyleOddzialLayer() {
+  var r = getAgeRange();
+  var showLp = showLpInput.checked;
+  var showNonLp = showNonLpInput.checked;
+  var val = Number(opacityInput.value);
   oddzialLayer.eachLayer(function(layer) {
-    if (layer.feature) {
-      var p = layer.feature.properties;
+    if (!layer.feature) return;
+    var p = layer.feature.properties;
+    var lp = !p.key || !p.key.startsWith("non-LP:");
+    var show = (showLp && lp) || (showNonLp && !lp);
+    if (show) {
       var age = colorMode === "oldest" ? p.max_age_oldest : p.avg_age_dominant;
-      var col = getAgeColor(age);
-      layer.setStyle({ fillColor: col, color: "#333" });
+      show = Number.isFinite(age) && age >= r.minAge && age <= r.maxAge;
+    }
+    if (show) {
+      var col = getAgeColor(colorMode === "oldest" ? p.max_age_oldest : p.avg_age_dominant);
+      layer.setStyle({ fillColor: col, fillOpacity: val, color: "#333", opacity: 0.7, weight: 1.5 });
+    } else {
+      layer.setStyle({ fillOpacity: 0, opacity: 0 });
     }
   });
 }
@@ -310,6 +323,7 @@ async function loadData() {
       } else {
         initLayerMap();
         updateLayerByZoom();
+        restyleOddzialLayer();
         if (map.hasLayer(forestLayer)) applyFilter();
       }
     }
@@ -324,7 +338,7 @@ function updateLayerByZoom() {
   var z = map.getZoom();
   if (z < ODDZIAL_ZOOM) {
     if (map.hasLayer(forestLayer)) map.removeLayer(forestLayer);
-    if (!map.hasLayer(oddzialLayer)) oddzialLayer.addTo(map);
+    if (!map.hasLayer(oddzialLayer)) { oddzialLayer.addTo(map); restyleOddzialLayer(); }
   } else {
     if (map.hasLayer(oddzialLayer)) map.removeLayer(oddzialLayer);
     if (!map.hasLayer(forestLayer)) { forestLayer.addTo(map); applyFilter(); }
