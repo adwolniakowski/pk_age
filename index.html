@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wiek gatunków drzewostanu — Puszcza Knyszyńska</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/topojson-client@3"></script>
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .panel { position:absolute; top:12px; right:12px; z-index:1000; width:min(410px, calc(100vw - 24px)); background:rgba(255,255,255,.95); border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.18); padding:12px 14px; backdrop-filter:blur(6px); }
+    .panel h1 { margin:0 0 8px; font-size:17px; line-height:1.25; }
+    .panel p { margin:6px 0; font-size:13px; color:#333; }
+    code { background:#f0f0f0; padding:1px 4px; border-radius:4px; }
+    button, select, input { font:inherit; }
+    .panel button { border-radius:9px; border:1px solid #bbb; padding:7px 9px; background:#f5f5f5; cursor:pointer; }
+    .panel button:hover { background:#e9e9e9; }
+    .panel button.primary { background:#e8f2ff; border-color:#8fb8ea; }
+    .row { display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+    .row > * { flex:1; }
+    .filter-box { margin-top:10px; padding:9px 10px; border:1px solid #ddd; border-radius:12px; background:rgba(250,250,250,.9); }
+    .filter-title { display:flex; justify-content:space-between; gap:8px; font-size:13px; font-weight:700; margin-bottom:6px; }
+    .slider-row { display:grid; grid-template-columns:42px 1fr 44px; align-items:center; gap:8px; margin-top:5px; }
+    .slider-row input[type=range] { width:100%; padding:0; }
+    .small { font-size:12px; color:#555; }
+    .status { margin-top:8px; font-size:12px; color:#222; line-height:1.35; }
+    .status.error { color:#a40000; }
+    .legend { position:absolute; left:12px; bottom:22px; z-index:1000; background:rgba(255,255,255,.94); border-radius:14px; box-shadow:0 8px 30px rgba(0,0,0,.18); padding:10px 12px; font-size:12px; line-height:1.35; }
+    .legend-title { font-weight:700; margin-bottom:6px; }
+    .scale { width:230px; max-width:70vw; height:12px; border-radius:99px; border:1px solid #aaa; background:linear-gradient(90deg,#fff7bc,#fec44f,#fe9929,#ec7014,#cc4c02,#8c2d04,#3a1502); }
+    .legend-labels { display:flex; justify-content:space-between; gap:8px; margin-top:4px; }
+    .leaflet-popup-content { font-size:13px; max-height:50vh; overflow-y:auto; }
+    .popup-title { font-weight:700; margin-bottom:4px; }
+    .muted { color:#666; }
+    .mode-row { display:flex; gap:4px; margin:8px 0 4px; }
+    .mode-row label { flex:1; text-align:center; font-size:12px; padding:5px 2px; border-radius:8px; border:1px solid #bbb; background:#f5f5f5; cursor:pointer; }
+    .mode-row input:checked+label { background:#e8f2ff; border-color:#8fb8ea; font-weight:700; }
+    .mode-row input { display:none; }
+    .species-table { width:100%; border-collapse:collapse; margin-top:4px; font-size:12px; }
+    .species-table th { background:#f0f0f0; padding:2px 5px; text-align:left; font-weight:600; }
+    .species-table td { padding:2px 5px; border-top:1px solid #e0e0e0; }
+    .species-table tr.dominant td { font-weight:700; }
+    @media (max-width:700px) { .panel { top:auto; right:8px; left:8px; bottom:8px; width:auto; max-height:48vh; overflow:auto; } .legend { left:8px; bottom:calc(48vh + 22px); } }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <h1>Wiek gatunków drzewostanu — Puszcza Knyszyńska</h1>
+  <p>Wydzielenia LP i poza LP (SILP/BDL).</p>
+
+  <div class="mode-row">
+    <input type="radio" name="colorMode" id="modeDominant" value="dominant" checked>
+    <label for="modeDominant">Gatunek dominujący</label>
+    <input type="radio" name="colorMode" id="modeOldest" value="oldest">
+    <label for="modeOldest">Najstarszy gatunek</label>
+  </div>
+
+  <div class="filter-box">
+    <div class="filter-title"><span>Filtr wieku</span><span id="ageRangeLabel">0–250 lat</span></div>
+    <div class="slider-row"><span class="small">od</span><input id="ageMin" type="range" min="0" max="300" step="1" value="0"><output id="ageMinOut">0</output></div>
+    <div class="slider-row"><span class="small">do</span><input id="ageMax" type="range" min="0" max="300" step="1" value="250"><output id="ageMaxOut">250</output></div>
+  </div>
+  <div class="row">
+    <label class="small">Przezroczystość<br><input id="opacity" type="range" min="0.05" max="0.9" step="0.05" value="0.55"></label>
+  </div>
+  <div class="row">
+    <label class="small"><input id="showLp" type="checkbox" checked> Lasy Państwowe</label>
+    <label class="small"><input id="showNonLp" type="checkbox" checked> Poza LP</label>
+  </div>
+  <div id="status" class="status">Gotowe.</div>
+</div>
+<div class="legend"><div class="legend-title">Wiek [lata]</div><div class="scale"></div><div class="legend-labels"><span>0</span><span>40</span><span>80</span><span>120</span><span>160</span><span>200+</span></div></div>
+<script>
+const map = L.map("map", { preferCanvas: true, zoomControl: true }).fitBounds([[52.86, 22.70], [53.70, 23.94]]);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
+
+const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 4 });
+let allLoadedFeatures = [];
+
+
+let layerByFeatureId = new Map();
+let filterToken = 0;
+let lastFilterStats = { visible: 0, total: 0 };
+let colorMode = "dominant";
+
+const forestLayer = L.geoJSON(null, { renderer: canvasRenderer, style: styleFeature, onEachFeature }).addTo(map);
+const statusEl = document.getElementById("status");
+const opacityInput = document.getElementById("opacity");
+const ageMinInput = document.getElementById("ageMin");
+const ageMaxInput = document.getElementById("ageMax");
+const ageMinOut = document.getElementById("ageMinOut");
+const ageMaxOut = document.getElementById("ageMaxOut");
+const ageRangeLabel = document.getElementById("ageRangeLabel");
+const showLpInput = document.getElementById("showLp");
+const showNonLpInput = document.getElementById("showNonLp");
+
+opacityInput.addEventListener("input", scheduleFilter);
+ageMinInput.addEventListener("input", scheduleFilter);
+ageMaxInput.addEventListener("input", scheduleFilter);
+showLpInput.addEventListener("change", scheduleFilter);
+showNonLpInput.addEventListener("change", scheduleFilter);
+document.querySelectorAll('input[name="colorMode"]').forEach(el => {
+  el.addEventListener("change", () => { colorMode = el.value; scheduleFilter(); });
+});
+
+loadData();
+
+function setStatus(text, isError = false) { statusEl.textContent = text; statusEl.className = "status" + (isError ? " error" : ""); }
+
+async function loadData() {
+  setStatus("Wczytuję dane z pk-data.topojson…");
+  try {
+    const resp = await fetch("pk-data.topojson");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const topo = await resp.json();
+    const fc = topojson.feature(topo, topo.objects.data);
+    const features = (fc.features || []).map((f, i) => { f._localId = i; return f; });
+    renderDataset(features);
+  } catch (err) {
+    console.error(err);
+    setStatus(`Błąd: ${err.message}`, true);
+  }
+}
+
+function renderDataset(features) {
+  allLoadedFeatures = features;
+  forestLayer.clearLayers();
+  layerByFeatureId = new Map();
+  forestLayer.addData({ type: "FeatureCollection", features: allLoadedFeatures });
+  forestLayer.eachLayer(layer => { if (layer.feature) layerByFeatureId.set(layer.feature._localId, layer); });
+  setStatus(`Wczytuję dane…`);
+  scheduleFilter();
+}
+
+function getOldestAge(p) {
+  const list = p.species_list;
+  if (!list || !list.length) return Number(p.species_age);
+  let maxAge = -Infinity;
+  for (const s of list) {
+    if (s.a != null && Number(s.a) > maxAge) maxAge = Number(s.a);
+  }
+  return maxAge > -Infinity ? maxAge : Number(p.species_age);
+}
+
+function getFeatureAge(p) {
+  if (colorMode === "oldest") return getOldestAge(p);
+  const list = p.species_list;
+  if (!list || !list.length) return Number(p.species_age);
+  let best = null, bestShare = -1;
+  for (const s of list) {
+    const share = parseInt(s.s, 10);
+    if (!isNaN(share) && share > bestShare) { bestShare = share; best = s; }
+  }
+  return best && best.a != null ? Number(best.a) : Number(p.species_age);
+}
+
+function getAgeRange() {
+  let minAge = Number(ageMinInput.value), maxAge = Number(ageMaxInput.value);
+  if (minAge > maxAge) {
+    if (document.activeElement === ageMinInput) { maxAge = minAge; ageMaxInput.value = String(maxAge); }
+    else { minAge = maxAge; ageMinInput.value = String(minAge); }
+  }
+  ageMinOut.value = String(minAge); ageMaxOut.value = String(maxAge); ageRangeLabel.textContent = `${minAge}–${maxAge} lat`;
+  return { minAge, maxAge };
+}
+
+function scheduleFilter() {
+  getAgeRange();
+  const token = ++filterToken;
+  requestAnimationFrame(() => applyFilterChunked(token));
+}
+
+function isLp(p) { return !(p.owner_cat_name && p.owner_cat_name.trim()); }
+
+function applyFilterChunked(token) {
+  if (token !== filterToken) return;
+  const { minAge, maxAge } = getAgeRange();
+  const showLp = showLpInput.checked;
+  const showNonLp = showNonLpInput.checked;
+  const features = allLoadedFeatures;
+  const total = features.length;
+  let i = 0, visible = 0;
+  const chunkSize = 700;
+  function step() {
+    if (token !== filterToken) return;
+    const end = Math.min(i + chunkSize, total);
+    for (; i < end; i++) {
+      const f = features[i];
+      const p = f.properties || {};
+      const lp = isLp(p);
+      if (!(showLp && lp) && !(showNonLp && !lp)) {
+        const layer = layerByFeatureId.get(f._localId);
+        if (layer) layer.setStyle(styleFeature(f, false, null));
+        continue;
+      }
+      const age = getFeatureAge(p);
+      const show = Number.isFinite(age) && age >= minAge && age <= maxAge;
+      if (show) visible++;
+      const layer = layerByFeatureId.get(f._localId);
+      if (layer) layer.setStyle(styleFeature(f, show, age));
+    }
+    if (i < total) {
+      setStatus(`Filtruję lokalnie… ${i}/${total}`);
+      setTimeout(step, 0);
+    } else {
+      lastFilterStats = { visible, total };
+      let modeLabel = `Widoczne: ${visible} z ${total}`;
+      if (!showLp) modeLabel += " (bez LP)";
+      if (!showNonLp) modeLabel += " (bez poza LP)";
+      modeLabel += `. ${colorMode === "oldest" ? "Kolor wg NAJSTARSZEGO." : "Kolor wg DOMINUJĄCEGO."}`;
+      setStatus(modeLabel);
+    }
+  }
+  step();
+}
+
+function colorByAge(age) {
+  if (!Number.isFinite(age) || age <= 0) return "#bdbdbd";
+  if (age < 20) return "#fff7bc"; if (age < 40) return "#fee391"; if (age < 60) return "#fec44f";
+  if (age < 80) return "#fe9929"; if (age < 100) return "#ec7014"; if (age < 120) return "#cc4c02";
+  if (age < 160) return "#993404"; if (age < 200) return "#662506"; return "#3a1502";
+}
+
+function styleFeature(feature, forcedVisible, forcedAge) {
+  const p = feature.properties || {};
+  let visible = forcedVisible;
+  const age = forcedAge !== undefined ? forcedAge : getFeatureAge(p);
+  if (visible === undefined) {
+    const { minAge, maxAge } = getAgeRange();
+    visible = Number.isFinite(age) && age >= minAge && age <= maxAge;
+  }
+  const fillOpacity = visible ? Number(opacityInput.value) : 0;
+  const fillColor = Number.isFinite(age) ? colorByAge(age) : "#bdbdbd";
+  return { color: fillColor, weight: 0.45, opacity: visible ? 0.75 : 0, fillColor, fillOpacity, interactive: visible };
+}
+
+function formatShare(s) {
+  const n = parseInt(s, 10);
+  return isNaN(n) ? s : String(n * 10);
+}
+
+function getDominantSpecies(p) {
+  const list = p.species_list;
+  if (!list || !list.length) return null;
+  let best = null, bestShare = -1;
+  for (const s of list) {
+    const share = parseInt(s.s, 10);
+    if (!isNaN(share) && share > bestShare) { bestShare = share; best = s; }
+  }
+  return best;
+}
+
+function getHighlightSpecies(p) {
+  if (colorMode === "oldest") return getOldestSpecies(p);
+  return getDominantSpecies(p);
+}
+
+function getOldestSpecies(p) {
+  const list = p.species_list || [];
+  let best = null, maxAge = -Infinity;
+  for (const s of list) {
+    if (s.a != null && Number(s.a) > maxAge) { maxAge = Number(s.a); best = s; }
+  }
+  return best;
+}
+
+function onEachFeature(feature, layer) {
+  layer.bindPopup(() => {
+    const p = feature.properties || {};
+    const list = p.species_list || [];
+    const areaHa = Number.isFinite(Number(p.sub_area)) ? Number(p.sub_area).toFixed(2) : "b.d.";
+    const highlight = getHighlightSpecies(p);
+    const oldestAge = getOldestAge(p);
+    const oldestSpecies = getOldestSpecies(p);
+
+    let speciesHtml = "";
+    if (list.length) {
+      speciesHtml = `<table class="species-table"><tr><th>Gat.</th><th>Udział</th><th>Wiek</th></tr>`;
+      for (const s of list) {
+        const shareDisplay = formatShare(s.s);
+        const ageDisplay = s.a != null ? s.a : "—";
+        const cls = (highlight && s.c === highlight.c && s.a === highlight.a && s.s === highlight.s) ? ' class="dominant"' : "";
+        speciesHtml += `<tr${cls}><td>${escapeHtml(s.c)}</td><td>${shareDisplay}%</td><td>${ageDisplay}</td></tr>`;
+      }
+      speciesHtml += "</table>";
+    }
+
+    return `<div class="popup-title">${escapeHtml(p.adress_forest || "Wydzielenie")}</div>
+      ${speciesHtml}
+      <table style="width:100%;margin-top:4px;font-size:12px">
+        <tr><td class="muted">Powierzchnia:</td><td>${areaHa} ha</td></tr>
+        <tr><td class="muted">Typ siedliskowy:</td><td>${escapeHtml(p.site_type_cd || "b.d.")}</td></tr>
+        ${p.stand_struct_cd ? `<tr><td class="muted">Struktura:</td><td>${escapeHtml(p.stand_struct_cd)}</td></tr>` : ""}
+        ${p.soil_subtype_cd ? `<tr><td class="muted">Gleba:</td><td>${escapeHtml(p.soil_subtype_cd)}</td></tr>` : ""}
+        ${p.moisture_name ? `<tr><td class="muted">Wilgotność:</td><td>${escapeHtml(p.moisture_name)}</td></tr>` : ""}
+        ${p.veg_cover_name ? `<tr><td class="muted">Pokrywa:</td><td>${escapeHtml(p.veg_cover_name)}</td></tr>` : ""}
+        ${highlight ? `<tr><td class="muted">${colorMode === "oldest" ? "Najstarszy" : "Dominujący"}:</td><td><b>${escapeHtml(highlight.c)}</b> (${formatShare(highlight.s)}%, wiek ${highlight.a})</td></tr>` : ""}
+        ${oldestSpecies && colorMode !== "oldest" ? `<tr><td class="muted">Najstarszy:</td><td><b>${escapeHtml(oldestSpecies.c)}</b> (${formatShare(oldestSpecies.s)}%, wiek ${oldestSpecies.a})</td></tr>` : ""}
+      </table>`;
+  });
+  layer.on({ mouseover: e => e.target.setStyle({ weight: 2, color: "#111", fillOpacity: Math.min(0.9, Number(opacityInput.value) + 0.2) }), mouseout: e => e.target.setStyle(styleFeature(e.target.feature)) });
+}
+
+function escapeHtml(value) { return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+</script>
+</body>
+</html>
