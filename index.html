@@ -389,7 +389,8 @@ function buildPopupContent(p) {
     }
     speciesHtml += "</table>";
   } else if (Number.isFinite(Number(p.species_age))) {
-    speciesHtml = '<div style="margin:4px 0">Wiek: ' + p.species_age + ' lat<br><span style="color:#666">Gatunek: b/d</span></div>';
+    speciesHtml = '<table class="species-table"><tr><th>Gat.</th><th>Udział</th><th>Wiek</th></tr>' +
+      '<tr class="dominant"><td>b/d</td><td>100%</td><td>' + p.species_age + '</td></tr></table>';
   } else {
     speciesHtml = '<div style="margin:4px 0;color:#666">Gatunek: b/d, wiek: b/d</div>';
   }
