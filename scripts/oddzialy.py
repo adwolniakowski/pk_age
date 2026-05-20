@@ -71,14 +71,16 @@ groups = defaultdict(list)
 
 for g in geometries:
     p = g["properties"]
-    if p.get("owner_cat_name"):
-        continue  # tylko LP
     addr = p.get("adress_forest", "")
     parts = addr.split("-")
-    if len(parts) < 4:
+    # Klucz: dla standardowego formatu lesnego (4+ cyfrowe czesci)
+    # uzywamy Nadl-Obreb-Lesnictwo-Oddzial, inaczej pierwsza czesc
+    if len(parts) >= 4 and parts[0].strip().isdigit():
+        key = "-".join(parts[i].strip() for i in range(4))
+    elif parts:
+        key = parts[0].strip()
+    else:
         continue
-    # klucz: Nadlesnictwo-Obreb-Lesnictwo-Oddzial
-    key = "-".join(parts[i].strip() for i in range(4))
     area = 0
     try: area = float(p.get("sub_area") or 0)
     except: pass
