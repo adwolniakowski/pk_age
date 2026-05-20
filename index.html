@@ -245,8 +245,18 @@ ageMinInput.addEventListener("input", applyFilter);
 ageMaxInput.addEventListener("input", applyFilter);
 showLpInput.addEventListener("change", applyFilter);
 showNonLpInput.addEventListener("change", applyFilter);
+function restyleOddzialLayer() {
+  oddzialLayer.eachLayer(function(layer) {
+    if (layer.feature) {
+      var p = layer.feature.properties;
+      var age = colorMode === "oldest" ? p.max_age_oldest : p.avg_age_dominant;
+      var col = getAgeColor(age);
+      layer.setStyle({ fillColor: col, color: "#333" });
+    }
+  });
+}
 document.querySelectorAll('input[name="colorMode"]').forEach(function(el) {
-  el.addEventListener("change", function() { colorMode = el.value; applyFilter(); });
+  el.addEventListener("change", function() { colorMode = el.value; applyFilter(); restyleOddzialLayer(); });
 });
 
 // Popup through click on the geoJSON layer
