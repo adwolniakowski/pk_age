@@ -120,12 +120,11 @@ function getCentroid(geom) {
 function updateOldMarkers() {
   oldMarkers.clearLayers();
   if (map.hasLayer(oldMarkers)) map.removeLayer(oldMarkers);
-  if (!showOldInput.checked || !map.hasLayer(forestLayer)) return;
+  if (!showOldInput.checked) return;
   map.addLayer(oldMarkers);
   var r = getAgeRange();
   var showLp = showLpInput.checked;
   var showNonLp = showNonLpInput.checked;
-  var count = 0;
   for (var i = 0; i < allLoadedFeatures.length; i++) {
     var f = allLoadedFeatures[i];
     var p = f.properties;
@@ -135,15 +134,15 @@ function updateOldMarkers() {
     if (!Number.isFinite(ac.age) || ac.age < r.minAge || ac.age > r.maxAge || ac.age < 200) continue;
     var center = getCentroid(f.geometry);
     if (center) {
+      var r2 = 5 + Math.min(ac.age / 80, 10);
       L.circleMarker(center, {
-        radius: 4,
-        color: "#c00000",
-        fillColor: "#ff2020",
-        fillOpacity: 0.85,
-        weight: 1.5,
-        opacity: 0.9
+        radius: r2,
+        color: "#fff",
+        fillColor: "#ff0040",
+        fillOpacity: 0.9,
+        weight: 2,
+        opacity: 1
       }).addTo(oldMarkers);
-      count++;
     }
   }
 }
