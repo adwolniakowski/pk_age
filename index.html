@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/topojson-client@3"></script>
-  <script src="https://unpkg.com/leaflet.vectorgrid@1.3.0/dist/Leaflet.VectorGrid.bundled.js"></script>
   <style>
     html, body, #map { height: 100%; margin: 0; }
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -75,189 +74,124 @@
 </div>
 <div class="legend"><div class="legend-title">Wiek [lata]</div><div class="scale"></div><div class="legend-labels"><span>0</span><span>40</span><span>80</span><span>120</span><span>160</span><span>200+</span></div></div>
 <script>
-const map = L.map("map", { zoomControl: true }).fitBounds([[52.86, 22.70], [53.70, 23.94]]);
+var map = L.map("map", { preferCanvas: true, zoomControl: true }).fitBounds([[52.86, 22.70], [53.70, 23.94]]);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
 
-let allLoadedFeatures = [];
-let vectorGrid = null;
-let colorMode = "dominant";
+var allLoadedFeatures = [];
+var forestLayer = L.geoJSON(null, { renderer: L.canvas(), style: styleFeature }).addTo(map);
+var colorMode = "dominant";
 
-const statusEl = document.getElementById("status");
-const opacityInput = document.getElementById("opacity");
-const ageMinInput = document.getElementById("ageMin");
-const ageMaxInput = document.getElementById("ageMax");
-const ageMinOut = document.getElementById("ageMinOut");
-const ageMaxOut = document.getElementById("ageMaxOut");
-const ageRangeLabel = document.getElementById("ageRangeLabel");
-const showLpInput = document.getElementById("showLp");
-const showNonLpInput = document.getElementById("showNonLp");
+var statusEl = document.getElementById("status");
+var opacityInput = document.getElementById("opacity");
+var ageMinInput = document.getElementById("ageMin");
+var ageMaxInput = document.getElementById("ageMax");
+var ageMinOut = document.getElementById("ageMinOut");
+var ageMaxOut = document.getElementById("ageMaxOut");
+var ageRangeLabel = document.getElementById("ageRangeLabel");
+var showLpInput = document.getElementById("showLp");
+var showNonLpInput = document.getElementById("showNonLp");
 
 function setStatus(text, isError) { statusEl.textContent = text; statusEl.className = "status" + (isError ? " error" : ""); }
 
 function getOldestAge(p) {
-  const list = p.species_list;
+  var list = p.species_list;
   if (!list || !list.length) return Number(p.species_age);
-  let maxAge = -Infinity;
-  for (const s of list) { if (s.a != null && Number(s.a) > maxAge) maxAge = Number(s.a); }
+  var maxAge = -Infinity;
+  for (var i = 0; i < list.length; i++) { if (list[i].a != null && Number(list[i].a) > maxAge) maxAge = Number(list[i].a); }
   return maxAge > -Infinity ? maxAge : Number(p.species_age);
 }
 
 function getFeatureAge(p) {
   if (colorMode === "oldest") return getOldestAge(p);
-  const list = p.species_list;
+  var list = p.species_list;
   if (!list || !list.length) return Number(p.species_age);
-  let best = null, bestShare = -1;
-  for (const s of list) {
-    const share = parseInt(s.s, 10);
-    if (!isNaN(share) && share > bestShare) { bestShare = share; best = s; }
+  var best = null, bestShare = -1;
+  for (var i = 0; i < list.length; i++) {
+    var share = parseInt(list[i].s, 10);
+    if (!isNaN(share) && share > bestShare) { bestShare = share; best = list[i]; }
   }
   return best && best.a != null ? Number(best.a) : Number(p.species_age);
 }
 
-function getAgeRange() {
-  let minAge = Number(ageMinInput.value), maxAge = Number(ageMaxInput.value);
-  if (minAge > maxAge) {
-    if (document.activeElement === ageMinInput) { maxAge = minAge; ageMaxInput.value = String(maxAge); }
-    else { minAge = maxAge; ageMinInput.value = String(minAge); }
-  }
-  ageMinOut.value = String(minAge); ageMaxOut.value = String(maxAge); ageRangeLabel.textContent = `${minAge}–${maxAge} lat`;
-  return { minAge, maxAge };
-}
-
-function colorByAge(age) {
-  if (!Number.isFinite(age) || age <= 0) return "#bdbdbd";
-  if (age < 20) return "#fff7bc"; if (age < 40) return "#fee391"; if (age < 60) return "#fec44f";
-  if (age < 80) return "#fe9929"; if (age < 100) return "#ec7014"; if (age < 120) return "#cc4c02";
-  if (age < 160) return "#993404"; if (age < 200) return "#662506"; return "#3a1502";
+function getFeatureAgeAndColor(p) {
+  var age = getFeatureAge(p);
+  if (!Number.isFinite(age) || age <= 0) return { age: age, color: "#bdbdbd" };
+  var color;
+  if (age < 20) color = "#fff7bc"; else if (age < 40) color = "#fee391"; else if (age < 60) color = "#fec44f";
+  else if (age < 80) color = "#fe9929"; else if (age < 100) color = "#ec7014"; else if (age < 120) color = "#cc4c02";
+  else if (age < 160) color = "#993404"; else if (age < 200) color = "#662506"; else color = "#3a1502";
+  return { age: age, color: color };
 }
 
 function isLp(p) { return !(p.owner_cat_name && p.owner_cat_name.trim()); }
 
-function getDominantSpecies(p) {
-  const list = p.species_list;
-  if (!list || !list.length) return null;
-  let best = null, bestShare = -1;
-  for (const s of list) {
-    const share = parseInt(s.s, 10);
-    if (!isNaN(share) && share > bestShare) { bestShare = share; best = s; }
+function getAgeRange() {
+  var minAge = Number(ageMinInput.value), maxAge = Number(ageMaxInput.value);
+  if (minAge > maxAge) {
+    if (document.activeElement === ageMinInput) { maxAge = minAge; ageMaxInput.value = String(maxAge); }
+    else { minAge = maxAge; ageMinInput.value = String(minAge); }
   }
-  return best;
+  ageMinOut.value = String(minAge); ageMaxOut.value = String(maxAge); ageRangeLabel.textContent = minAge + "–" + maxAge + " lat";
+  return { minAge: minAge, maxAge: maxAge };
 }
 
-function getOldestSpecies(p) {
-  const list = p.species_list || [];
-  let best = null, maxAge = -Infinity;
-  for (const s of list) { if (s.a != null && Number(s.a) > maxAge) { maxAge = Number(s.a); best = s; } }
-  return best;
-}
-
-function getHighlightSpecies(p) {
-  if (colorMode === "oldest") return getOldestSpecies(p);
-  return getDominantSpecies(p);
-}
-
-function formatShare(s) {
-  const n = parseInt(s, 10);
-  return isNaN(n) ? s : String(n * 10);
-}
-
-function escapeHtml(v) { return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
-
-function buildPopupContent(p) {
-  const list = p.species_list || [];
-  const areaHa = Number.isFinite(Number(p.sub_area)) ? Number(p.sub_area).toFixed(2) : "b.d.";
-  const highlight = getHighlightSpecies(p);
-  const oldestSpecies = getOldestSpecies(p);
-  let speciesHtml = "";
-  if (list.length) {
-    speciesHtml = `<table class="species-table"><tr><th>Gat.</th><th>Udział</th><th>Wiek</th></tr>`;
-    for (const s of list) {
-      const shareDisplay = formatShare(s.s);
-      const ageDisplay = s.a != null ? s.a : "—";
-      const cls = (highlight && s.c === highlight.c && s.a === highlight.a && s.s === highlight.s) ? ' class="dominant"' : "";
-      speciesHtml += `<tr${cls}><td>${escapeHtml(s.c)}</td><td>${shareDisplay}%</td><td>${ageDisplay}</td></tr>`;
-    }
-    speciesHtml += "</table>";
-  }
-  return `<div class="popup-title">${escapeHtml(p.adress_forest || "Wydzielenie")}</div>
-    ${speciesHtml}
-    <table style="width:100%;margin-top:4px;font-size:12px">
-      <tr><td class="muted">Powierzchnia:</td><td>${areaHa} ha</td></tr>
-      <tr><td class="muted">Typ siedliskowy:</td><td>${escapeHtml(p.site_type_cd || "b.d.")}</td></tr>
-      ${p.stand_struct_cd ? `<tr><td class="muted">Struktura:</td><td>${escapeHtml(p.stand_struct_cd)}</td></tr>` : ""}
-      ${p.soil_subtype_cd ? `<tr><td class="muted">Gleba:</td><td>${escapeHtml(p.soil_subtype_cd)}</td></tr>` : ""}
-      ${p.moisture_name ? `<tr><td class="muted">Wilgotność:</td><td>${escapeHtml(p.moisture_name)}</td></tr>` : ""}
-      ${p.veg_cover_name ? `<tr><td class="muted">Pokrywa:</td><td>${escapeHtml(p.veg_cover_name)}</td></tr>` : ""}
-      ${highlight ? `<tr><td class="muted">${colorMode === "oldest" ? "Najstarszy" : "Dominujący"}:</td><td><b>${escapeHtml(highlight.c)}</b> (${formatShare(highlight.s)}%, wiek ${highlight.a})</td></tr>` : ""}
-      ${oldestSpecies && colorMode !== "oldest" ? `<tr><td class="muted">Najstarszy:</td><td><b>${escapeHtml(oldestSpecies.c)}</b> (${formatShare(oldestSpecies.s)}%, wiek ${oldestSpecies.a})</td></tr>` : ""}
-    </table>`;
-}
-
-function tileStyle(props) {
-  const age = getFeatureAge(props);
-  const { minAge, maxAge } = getAgeRange();
-  const lp = isLp(props);
-  const show = Number.isFinite(age) && age >= minAge && age <= maxAge &&
+function shouldShow(p) {
+  var r = getAgeRange();
+  var ac = getFeatureAgeAndColor(p);
+  var lp = isLp(p);
+  return Number.isFinite(ac.age) && ac.age >= r.minAge && ac.age <= r.maxAge &&
     ((showLpInput.checked && lp) || (showNonLpInput.checked && !lp));
-  const fc = Number.isFinite(age) ? colorByAge(age) : "#bdbdbd";
+}
+
+function styleFeature(feature) {
+  var p = feature.properties || {};
+  var show = shouldShow(p);
+  var ac = getFeatureAgeAndColor(p);
   return {
-    fillColor: fc, fillOpacity: show ? Number(opacityInput.value) : 0,
-    color: fc, weight: 0.45, opacity: show ? 0.7 : 0
+    fillColor: ac.color, fillOpacity: show ? Number(opacityInput.value) : 0,
+    color: ac.color, weight: 0.45, opacity: show ? 0.7 : 0
   };
 }
 
-function initVectorGrid(fc) {
-  if (vectorGrid) map.removeLayer(vectorGrid);
-  vectorGrid = L.vectorGrid.slicer(fc, {
-    rendererFactory: L.canvas.tile,
-    vectorTileLayerStyles: { sliced: tileStyle },
-    interactive: true,
-    getFeatureId: f => f._localId
-  });
-  vectorGrid.on("click", function(e) {
-    var lay = e.layer;
-    var props = lay && (lay.properties || (lay.feature && lay.feature.properties));
-    if (props) L.popup().setLatLng(e.latlng).setContent(buildPopupContent(props)).openOn(map);
-  });
-  vectorGrid.addTo(map);
+function rebuildLayer() {
+  forestLayer.clearLayers();
+  forestLayer.addData({ type: "FeatureCollection", features: allLoadedFeatures });
+  updateStatus();
 }
 
-function countVisible() {
-  const { minAge, maxAge } = getAgeRange();
-  const showLp = showLpInput.checked;
-  const showNonLp = showNonLpInput.checked;
-  let visible = 0;
-  for (const f of allLoadedFeatures) {
-    const p = f.properties;
-    const lp = isLp(p);
+function updateStatus() {
+  var r = getAgeRange();
+  var showLp = showLpInput.checked;
+  var showNonLp = showNonLpInput.checked;
+  var visible = 0, total = allLoadedFeatures.length;
+  for (var i = 0; i < total; i++) {
+    var p = allLoadedFeatures[i].properties;
+    var lp = isLp(p);
     if (!((showLp && lp) || (showNonLp && !lp))) continue;
-    const age = getFeatureAge(p);
-    if (Number.isFinite(age) && age >= minAge && age <= maxAge) visible++;
+    var ac = getFeatureAgeAndColor(p);
+    if (Number.isFinite(ac.age) && ac.age >= r.minAge && ac.age <= r.maxAge) visible++;
   }
-  return visible;
-}
-
-function updateUI() {
-  getAgeRange();
-  const visible = countVisible();
-  const total = allLoadedFeatures.length;
-  const showLp = showLpInput.checked;
-  const showNonLp = showNonLpInput.checked;
-  let label = `Widoczne: ${visible} z ${total}`;
+  var label = "Widoczne: " + visible + " z " + total;
   if (!showLp) label += " (bez LP)";
   if (!showNonLp) label += " (bez poza LP)";
-  label += `. ${colorMode === "oldest" ? "Kolor wg NAJSTARSZEGO." : "Kolor wg DOMINUJĄCEGO."}`;
+  label += ". " + (colorMode === "oldest" ? "Kolor wg NAJSTARSZEGO." : "Kolor wg DOMINUJĄCEGO.");
   setStatus(label);
-  if (vectorGrid) vectorGrid.redraw();
 }
 
-opacityInput.addEventListener("input", function() { if (vectorGrid) vectorGrid.redraw(); });
-ageMinInput.addEventListener("input", updateUI);
-ageMaxInput.addEventListener("input", updateUI);
-showLpInput.addEventListener("change", updateUI);
-showNonLpInput.addEventListener("change", updateUI);
+opacityInput.addEventListener("input", rebuildLayer);
+ageMinInput.addEventListener("input", rebuildLayer);
+ageMaxInput.addEventListener("input", rebuildLayer);
+showLpInput.addEventListener("change", rebuildLayer);
+showNonLpInput.addEventListener("change", rebuildLayer);
 document.querySelectorAll('input[name="colorMode"]').forEach(function(el) {
-  el.addEventListener("change", function() { colorMode = el.value; updateUI(); });
+  el.addEventListener("change", function() { colorMode = el.value; rebuildLayer(); });
+});
+
+// Popup through click on the geoJSON layer
+forestLayer.on("click", function(e) {
+  var p = e.layer && e.layer.feature && e.layer.feature.properties;
+  if (!p) return;
+  L.popup().setLatLng(e.latlng).setContent(buildPopupContent(p)).openOn(map);
 });
 
 loadData();
@@ -265,17 +199,76 @@ loadData();
 async function loadData() {
   setStatus("Wczytuję dane z pk-data.topojson…");
   try {
-    const resp = await fetch("pk-data.topojson");
+    var resp = await fetch("pk-data.topojson");
     if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const topo = await resp.json();
-    const fc = topojson.feature(topo, topo.objects.data);
+    var topo = await resp.json();
+    var fc = topojson.feature(topo, topo.objects.data);
     allLoadedFeatures = (fc.features || []).map(function(f, i) { f._localId = i; return f; });
-    initVectorGrid({ type: "FeatureCollection", features: allLoadedFeatures });
-    updateUI();
+    rebuildLayer();
   } catch (err) {
     console.error(err);
     setStatus("Błąd: " + err.message, true);
   }
+}
+
+function formatShare(s) {
+  var n = parseInt(s, 10);
+  return isNaN(n) ? s : String(n * 10);
+}
+
+function escapeHtml(v) { return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;"); }
+
+function getDominantSpecies(p) {
+  var list = p.species_list;
+  if (!list || !list.length) return null;
+  var best = null, bestShare = -1;
+  for (var i = 0; i < list.length; i++) {
+    var share = parseInt(list[i].s, 10);
+    if (!isNaN(share) && share > bestShare) { bestShare = share; best = list[i]; }
+  }
+  return best;
+}
+
+function getOldestSpecies(p) {
+  var list = p.species_list || [];
+  var best = null, maxAge = -Infinity;
+  for (var i = 0; i < list.length; i++) { if (list[i].a != null && Number(list[i].a) > maxAge) { maxAge = Number(list[i].a); best = list[i]; } }
+  return best;
+}
+
+function getHighlightSpecies(p) {
+  return colorMode === "oldest" ? getOldestSpecies(p) : getDominantSpecies(p);
+}
+
+function buildPopupContent(p) {
+  var list = p.species_list || [];
+  var areaHa = Number.isFinite(Number(p.sub_area)) ? Number(p.sub_area).toFixed(2) : "b.d.";
+  var highlight = getHighlightSpecies(p);
+  var oldestSpecies = getOldestSpecies(p);
+  var speciesHtml = "";
+  if (list.length) {
+    speciesHtml = '<table class="species-table"><tr><th>Gat.</th><th>Udział</th><th>Wiek</th></tr>';
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      var shareDisplay = formatShare(s.s);
+      var ageDisplay = s.a != null ? s.a : "—";
+      var cls = (highlight && s.c === highlight.c && s.a === highlight.a && s.s === highlight.s) ? ' class="dominant"' : "";
+      speciesHtml += "<tr" + cls + "><td>" + escapeHtml(s.c) + "</td><td>" + shareDisplay + "%</td><td>" + ageDisplay + "</td></tr>";
+    }
+    speciesHtml += "</table>";
+  }
+  return '<div class="popup-title">' + escapeHtml(p.adress_forest || "Wydzielenie") + '</div>' +
+    speciesHtml +
+    '<table style="width:100%;margin-top:4px;font-size:12px">' +
+    '<tr><td class="muted">Powierzchnia:</td><td>' + areaHa + ' ha</td></tr>' +
+    '<tr><td class="muted">Typ siedliskowy:</td><td>' + escapeHtml(p.site_type_cd || "b.d.") + '</td></tr>' +
+    (p.stand_struct_cd ? '<tr><td class="muted">Struktura:</td><td>' + escapeHtml(p.stand_struct_cd) + '</td></tr>' : "") +
+    (p.soil_subtype_cd ? '<tr><td class="muted">Gleba:</td><td>' + escapeHtml(p.soil_subtype_cd) + '</td></tr>' : "") +
+    (p.moisture_name ? '<tr><td class="muted">Wilgotność:</td><td>' + escapeHtml(p.moisture_name) + '</td></tr>' : "") +
+    (p.veg_cover_name ? '<tr><td class="muted">Pokrywa:</td><td>' + escapeHtml(p.veg_cover_name) + '</td></tr>' : "") +
+    (highlight ? '<tr><td class="muted">' + (colorMode === "oldest" ? "Najstarszy" : "Dominujący") + ':</td><td><b>' + escapeHtml(highlight.c) + '</b> (' + formatShare(highlight.s) + '%, wiek ' + highlight.a + ')</td></tr>' : "") +
+    (oldestSpecies && colorMode !== "oldest" ? '<tr><td class="muted">Najstarszy:</td><td><b>' + escapeHtml(oldestSpecies.c) + '</b> (' + formatShare(oldestSpecies.s) + '%, wiek ' + oldestSpecies.a + ')</td></tr>' : "") +
+    '</table>';
 }
 </script>
 </body>
