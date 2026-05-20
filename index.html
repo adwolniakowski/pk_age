@@ -388,6 +388,10 @@ function buildPopupContent(p) {
       speciesHtml += "<tr" + cls + "><td>" + escapeHtml(s.c) + "</td><td>" + shareDisplay + "%</td><td>" + ageDisplay + "</td></tr>";
     }
     speciesHtml += "</table>";
+  } else if (Number.isFinite(Number(p.species_age))) {
+    speciesHtml = '<div style="margin:4px 0">Wiek: ' + p.species_age + ' lat<br><span style="color:#666">Gatunek: b/d</span></div>';
+  } else {
+    speciesHtml = '<div style="margin:4px 0;color:#666">Gatunek: b/d, wiek: b/d</div>';
   }
   return '<div class="popup-title">' + escapeHtml(p.adress_forest || "Wydzielenie") + '</div>' +
     speciesHtml +
