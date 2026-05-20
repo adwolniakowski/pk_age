@@ -139,22 +139,25 @@ for key, items in groups.items():
         continue
     if merged.geom_type == "MultiPolygon":
         merged = merged.buffer(1e-8, resolution=1)
-    # Maksymalny wiek wsrod wydzielen w oddziale
+    # Srednia wazona i maksymalny wiek wsrod wydzielen w oddziale
+    total_area = sum(it["area"] for it in items)
     ages_dom = [it["age_dom"] for it in items if it["age_dom"] is not None]
     ages_old = [it["age_old"] for it in items if it["age_old"] is not None]
-    max_dom = max(ages_dom) if ages_dom else 0
+    w_avg_dom = 0
+    if total_area > 0 and ages_dom:
+        w_avg_dom = sum((it["age_dom"] or 0) * it["area"] for it in items) / total_area
     max_old = max(ages_old) if ages_old else 0
     features.append({
         "type": "Feature",
         "properties": {
             "key": key,
             "count": len(items),
-            "max_age_dominant": round(max_dom, 1),
+            "avg_age_dominant": round(w_avg_dom, 1),
             "max_age_oldest": round(max_old, 1),
         },
         "geometry": mapping(merged)
     })
-    print(f"  {key}: {len(items)} wydz, max_dom={max_dom:.0f}, max_old={max_old:.0f}")
+    print(f"  {key}: {len(items)} wydz, avg_dom={w_avg_dom:.0f}, max_old={max_old:.0f}")
 
 fc = {"type": "FeatureCollection", "features": features}
 topo_out = Topology(fc, prequantize=True, topology=False).to_dict()

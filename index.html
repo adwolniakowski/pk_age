@@ -151,7 +151,7 @@ function getAgeColor(age) {
 
 function styleOddzial(feature) {
   var p = feature.properties || {};
-  var age = colorMode === "oldest" ? p.max_age_oldest : p.max_age_dominant;
+  var age = colorMode === "oldest" ? p.max_age_oldest : p.avg_age_dominant;
   var col = getAgeColor(age);
   return { fillColor: col, fillOpacity: Number(opacityInput.value), color: "#333", weight: 1.5, opacity: 0.7 };
 }
@@ -354,12 +354,12 @@ function getHighlightSpecies(p) {
 function buildPopupContent(p) {
   // Oddział layer (low zoom)
   if (p.key) {
-    var domAge = Number.isFinite(p.max_age_dominant) ? p.max_age_dominant + " lat" : "b.d.";
+    var domAge = Number.isFinite(p.avg_age_dominant) ? p.avg_age_dominant + " lat" : "b.d.";
     var oldAge = Number.isFinite(p.max_age_oldest) ? p.max_age_oldest + " lat" : "b.d.";
     return '<div class="popup-title">Oddział ' + escapeHtml(p.key) + '</div>' +
       '<table style="width:100%;margin-top:4px;font-size:12px">' +
       '<tr><td class="muted">Wydzieleń:</td><td>' + p.count + '</td></tr>' +
-      '<tr><td class="muted">Max wiek (dominant):</td><td>' + domAge + '</td></tr>' +
+      '<tr><td class="muted">Śr. wiek (dominant):</td><td>' + domAge + '</td></tr>' +
       '<tr><td class="muted">Max wiek (najstarszy):</td><td>' + oldAge + '</td></tr>' +
       '<tr><td colspan="2" style="padding-top:6px;color:#666;font-style:italic">Przybliż, aby zobaczyć szczegóły wydzieleń</td></tr>' +
       '</table>';
