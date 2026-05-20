@@ -76,13 +76,11 @@
 var map = L.map("map", { preferCanvas: true, zoomControl: true }).fitBounds([[52.86, 22.70], [53.70, 23.94]]);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
 
-var ODDZIAL_ZOOM = 11;
+var ODDZIAL_ZOOM = 12;
 
 var allLoadedFeatures = [];
 var forestLayer = L.geoJSON(null, { style: styleFeature });
-var oddzialLayer = L.geoJSON(null, {
-  style: { fillColor: "#a6cee3", fillOpacity: 0.35, color: "#1f78b4", weight: 2, opacity: 0.8 }
-});
+var oddzialLayer = L.geoJSON(null, { style: styleOddzial });
 var layerByFeatureId = new Map();
 var filterToken = 0;
 var colorMode = (document.querySelector('input[name="colorMode"]:checked') || {}).value || "dominant";
@@ -121,12 +119,7 @@ function getFeatureAge(p) {
 
 function getFeatureAgeAndColor(p) {
   var age = getFeatureAge(p);
-  if (!Number.isFinite(age) || age <= 0) return { age: age, color: "#bdbdbd" };
-  var color;
-  if (age < 20) color = "#fff7bc"; else if (age < 40) color = "#fee391"; else if (age < 60) color = "#fec44f";
-  else if (age < 80) color = "#fe9929"; else if (age < 100) color = "#ec7014"; else if (age < 120) color = "#cc4c02";
-  else if (age < 160) color = "#993404"; else if (age < 200) color = "#662506"; else color = "#3a1502";
-  return { age: age, color: color };
+  return { age: age, color: getAgeColor(age) };
 }
 
 function isLp(p) { return !(p.owner_cat_name && p.owner_cat_name.trim()); }
@@ -147,6 +140,20 @@ function shouldShow(p) {
   var lp = isLp(p);
   return Number.isFinite(ac.age) && ac.age >= r.minAge && ac.age <= r.maxAge &&
     ((showLpInput.checked && lp) || (showNonLpInput.checked && !lp));
+}
+
+function getAgeColor(age) {
+  if (!Number.isFinite(age) || age <= 0) return "#bdbdbd";
+  if (age < 20) return "#fff7bc"; if (age < 40) return "#fee391"; if (age < 60) return "#fec44f";
+  if (age < 80) return "#fe9929"; if (age < 100) return "#ec7014"; if (age < 120) return "#cc4c02";
+  if (age < 160) return "#993404"; if (age < 200) return "#662506"; return "#3a1502";
+}
+
+function styleOddzial(feature) {
+  var p = feature.properties || {};
+  var age = colorMode === "oldest" ? p.avg_age_oldest : p.avg_age_dominant;
+  var col = getAgeColor(age);
+  return { fillColor: col, fillOpacity: 0.4, color: "#333", weight: 1.5, opacity: 0.7 };
 }
 
 function styleFeature(feature) {
@@ -343,10 +350,14 @@ function getHighlightSpecies(p) {
 
 function buildPopupContent(p) {
   // Oddział layer (low zoom)
-  if (p.oddzial) {
-    return '<div class="popup-title">Oddział ' + escapeHtml(p.oddzial) + '</div>' +
+  if (p.key) {
+    var domAge = Number.isFinite(p.avg_age_dominant) ? p.avg_age_dominant + " lat" : "b.d.";
+    var oldAge = Number.isFinite(p.avg_age_oldest) ? p.avg_age_oldest + " lat" : "b.d.";
+    return '<div class="popup-title">Oddział ' + escapeHtml(p.key) + '</div>' +
       '<table style="width:100%;margin-top:4px;font-size:12px">' +
       '<tr><td class="muted">Wydzieleń:</td><td>' + p.count + '</td></tr>' +
+      '<tr><td class="muted">Śr. wiek (dominant):</td><td>' + domAge + '</td></tr>' +
+      '<tr><td class="muted">Śr. wiek (najstarszy):</td><td>' + oldAge + '</td></tr>' +
       '<tr><td colspan="2" style="padding-top:6px;color:#666;font-style:italic">Przybliż, aby zobaczyć szczegóły wydzieleń</td></tr>' +
       '</table>';
   }

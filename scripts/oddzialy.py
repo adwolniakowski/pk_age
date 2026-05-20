@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Wczytuje pk-data.topojson, grupuje wydzielenia LP po oddziale,
-oblicza unary_union geometrii dla każdego oddziału i zapisuje jako
-pk-oddzialy.topojson (tylko dla LP).
+"""Grupy wydzielenia LP po oddziale (Nadl-Obreb-Lesnictwo-Oddzial),
+unary_union + srednia wieku wazona powierzchnia (dominant + oldest).
+Zapisuje pk-oddzialy.topojson.
 """
 
 import json, sys
@@ -17,18 +17,14 @@ def dequantize_arc(arc, scale, translate):
     coords = []
     x, y = 0, 0
     for dx, dy in arc:
-        x += dx
-        y += dy
+        x += dx; y += dy
         coords.append([x * scale[0] + translate[0], y * scale[1] + translate[1]])
     return coords
 
 def dequantize_arc_ref(ref, arcs, scale, translate):
     idx = abs(ref) - 1 if ref < 0 else ref
-    arc_data = arcs[idx]
-    coords = dequantize_arc(arc_data, scale, translate)
-    if ref < 0:
-        coords = coords[::-1]
-    return coords
+    coords = dequantize_arc(arcs[idx], scale, translate)
+    return coords[::-1] if ref < 0 else coords
 
 def arc_refs_to_polygon_coords(arc_refs, arcs, scale, translate):
     rings = []
@@ -39,6 +35,28 @@ def arc_refs_to_polygon_coords(arc_refs, arcs, scale, translate):
         rings.append(ring_coords)
     return rings
 
+def get_dominant_age(p):
+    """Wiek gatunku dominujacego (najwiekszy udzial w species_list)."""
+    sl = p.get("species_list") or []
+    if sl:
+        best = max(sl, key=lambda s: int(s.get("s") or 0))
+        if best.get("a") is not None:
+            try: return float(best["a"])
+            except: pass
+    fallback = p.get("species_age")
+    if fallback:
+        try: return float(fallback)
+        except: pass
+    return None
+
+def get_oldest_age(p):
+    """Najstarszy wiek z species_list lub species_age."""
+    sl = p.get("species_list") or []
+    if sl:
+        ages = [float(s["a"]) for s in sl if s.get("a") is not None]
+        if ages: return max(ages)
+    return get_dominant_age(p)
+
 print("Wczytuję TopoJSON…")
 with open(INPUT, "r") as f:
     topo = json.load(f)
@@ -47,23 +65,23 @@ scale = topo["transform"]["scale"]
 translate = topo["transform"]["translate"]
 arcs = topo["arcs"]
 geometries = topo["objects"]["data"]["geometries"]
+print(f"  {len(geometries)} geometrii, {len(arcs)} lukow")
 
-print(f"  {len(geometries)} geometrii, {len(arcs)} łuków")
-
-oddzial_groups = defaultdict(list)
-no_oddzial = 0
+groups = defaultdict(list)
 
 for g in geometries:
-    props = g["properties"]
-    owner = props.get("owner_cat_name", "")
-    if owner:
-        continue
-    addr = props.get("adress_forest", "")
+    p = g["properties"]
+    if p.get("owner_cat_name"):
+        continue  # tylko LP
+    addr = p.get("adress_forest", "")
     parts = addr.split("-")
     if len(parts) < 4:
-        no_oddzial += 1
         continue
-    oddzial = parts[3].strip()
+    # klucz: Nadlesnictwo-Obreb-Lesnictwo-Oddzial
+    key = "-".join(parts[i].strip() for i in range(4))
+    area = 0
+    try: area = float(p.get("sub_area") or 0)
+    except: pass
 
     try:
         if g["type"] == "Polygon":
@@ -71,40 +89,57 @@ for g in geometries:
             poly = shape({"type": "Polygon", "coordinates": coords})
         elif g["type"] == "MultiPolygon":
             polys = []
-            for poly_arcs in g["arcs"]:
-                coords = arc_refs_to_polygon_coords(poly_arcs, arcs, scale, translate)
+            for pa in g["arcs"]:
+                coords = arc_refs_to_polygon_coords(pa, arcs, scale, translate)
                 polys.append(coords)
             poly = shape({"type": "MultiPolygon", "coordinates": polys})
         else:
             continue
-        oddzial_groups[oddzial].append(poly)
+        groups[key].append({
+            "poly": poly,
+            "area": area,
+            "age_dom": get_dominant_age(p),
+            "age_old": get_oldest_age(p),
+        })
     except Exception as e:
-        print(f"  Błąd {addr}: {e}", file=sys.stderr)
+        print(f"  Blad {addr}: {e}", file=sys.stderr)
 
-print(f"  LP bez oddziału: {no_oddzial}")
-print(f"  Grupy oddziałów: {len(oddzial_groups)}")
+print(f"  Grupy: {len(groups)}")
 
-oddzial_features = []
-for oddzial, polys in oddzial_groups.items():
-    print(f"  Union oddział {oddzial} ({len(polys)} wydzieleń)…", end=" ", flush=True)
+features = []
+for key, items in groups.items():
+    polys = [it["poly"] for it in items]
+    # Union
     try:
         merged = unary_union([poly.buffer(1e-8, resolution=1) for poly in polys])
-    except Exception as e:
-        print(f"retry snap…", file=sys.stderr)
+    except:
         merged = unary_union([poly.buffer(0.000001, resolution=1) for poly in polys])
     if merged.is_empty:
-        print("pusty", file=sys.stderr)
+        print(f"  {key}: pusty", file=sys.stderr)
         continue
     if merged.geom_type == "MultiPolygon":
         merged = merged.buffer(1e-8, resolution=1)
-    feat = {"type": "Feature", "properties": {"oddzial": oddzial, "count": len(polys)}, "geometry": mapping(merged)}
-    oddzial_features.append(feat)
-    print(f"✓ ({merged.geom_type})")
+    # Srednia wieku wazona powierzchnia
+    total_area = sum(it["area"] for it in items)
+    w_avg_dom = 0
+    w_avg_old = 0
+    if total_area > 0:
+        w_avg_dom = sum((it["age_dom"] or 0) * it["area"] for it in items) / total_area
+        w_avg_old = sum((it["age_old"] or 0) * it["area"] for it in items) / total_area
+    features.append({
+        "type": "Feature",
+        "properties": {
+            "key": key,
+            "count": len(items),
+            "avg_age_dominant": round(w_avg_dom, 1),
+            "avg_age_oldest": round(w_avg_old, 1),
+        },
+        "geometry": mapping(merged)
+    })
+    print(f"  {key}: {len(items)} wydz, avg_dom={w_avg_dom:.0f}, avg_old={w_avg_old:.0f}")
 
-fc = {"type": "FeatureCollection", "features": oddzial_features}
-oddzial_topo = Topology(fc, prequantize=True, topology=False).to_dict()
-
+fc = {"type": "FeatureCollection", "features": features}
+topo_out = Topology(fc, prequantize=True, topology=False).to_dict()
 with open(OUTPUT, "w") as f:
-    json.dump(oddzial_topo, f, ensure_ascii=False)
-
-print(f"Zapisano {len(oddzial_features)} oddziałów do {OUTPUT}")
+    json.dump(topo_out, f, ensure_ascii=False)
+print(f"Zapisano {len(features)} oddzialow do {OUTPUT}")
