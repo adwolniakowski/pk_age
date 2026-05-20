@@ -22,8 +22,9 @@
     .row > * { flex:1; }
     .filter-box { margin-top:10px; padding:9px 10px; border:1px solid #ddd; border-radius:12px; background:rgba(250,250,250,.9); }
     .filter-title { display:flex; justify-content:space-between; gap:8px; font-size:13px; font-weight:700; margin-bottom:6px; }
-    .slider-row { display:grid; grid-template-columns:42px 1fr 44px; align-items:center; gap:8px; margin-top:5px; }
+    .slider-row { display:grid; grid-template-columns:42px 1fr 64px; align-items:center; gap:8px; margin-top:5px; }
     .slider-row input[type=range] { width:100%; padding:0; }
+    .slider-row input[type=number] { width:54px; padding:2px 4px; border:1px solid #ccc; border-radius:6px; font-size:12px; }
     .small { font-size:12px; color:#555; }
     .status { margin-top:8px; font-size:12px; color:#222; line-height:1.35; }
     .status.error { color:#a40000; }
@@ -58,9 +59,9 @@
   </div>
 
   <div class="filter-box">
-    <div class="filter-title"><span>Filtr wieku</span><span id="ageRangeLabel">0–250 lat</span></div>
-    <div class="slider-row"><span class="small">od</span><input id="ageMin" type="range" min="0" max="556" step="1" value="0"><output id="ageMinOut">0</output></div>
-    <div class="slider-row"><span class="small">do</span><input id="ageMax" type="range" min="0" max="556" step="1" value="556"><output id="ageMaxOut">556</output></div>
+    <div class="filter-title"><span>Filtr wieku</span><span id="ageRangeLabel">0–556 lat</span></div>
+    <div class="slider-row"><span class="small">od</span><input id="ageMin" type="range" min="0" max="556" step="1" value="0"><input id="ageMinVal" type="number" min="0" max="556" value="0"></div>
+    <div class="slider-row"><span class="small">do</span><input id="ageMax" type="range" min="0" max="556" step="1" value="556"><input id="ageMaxVal" type="number" min="0" max="556" value="556"></div>
   </div>
   <div class="row">
     <label class="small">Przezroczystość<br><input id="opacity" type="range" min="0.05" max="0.9" step="0.05" value="0.5"></label>
@@ -89,8 +90,8 @@ var statusEl = document.getElementById("status");
 var opacityInput = document.getElementById("opacity");
 var ageMinInput = document.getElementById("ageMin");
 var ageMaxInput = document.getElementById("ageMax");
-var ageMinOut = document.getElementById("ageMinOut");
-var ageMaxOut = document.getElementById("ageMaxOut");
+var ageMinVal = document.getElementById("ageMinVal");
+var ageMaxVal = document.getElementById("ageMaxVal");
 var ageRangeLabel = document.getElementById("ageRangeLabel");
 var showLpInput = document.getElementById("showLp");
 var showNonLpInput = document.getElementById("showNonLp");
@@ -130,7 +131,7 @@ function getAgeRange() {
     if (document.activeElement === ageMinInput) { maxAge = minAge; ageMaxInput.value = String(maxAge); }
     else { minAge = maxAge; ageMinInput.value = String(minAge); }
   }
-  ageMinOut.value = String(minAge); ageMaxOut.value = String(maxAge); ageRangeLabel.textContent = minAge + "–" + maxAge + " lat";
+  ageMinVal.value = String(minAge); ageMaxVal.value = String(maxAge); ageRangeLabel.textContent = minAge + "–" + maxAge + " lat";
   return { minAge: minAge, maxAge: maxAge };
 }
 
@@ -244,6 +245,16 @@ opacityInput.addEventListener("input", function() {
 function updateOddzialFilter() { applyFilter(); restyleOddzialLayer(); }
 ageMinInput.addEventListener("input", updateOddzialFilter);
 ageMaxInput.addEventListener("input", updateOddzialFilter);
+ageMinVal.addEventListener("input", function() {
+  var v = Math.min(Math.max(parseInt(this.value) || 0, 0), 556);
+  ageMinInput.value = String(v);
+  updateOddzialFilter();
+});
+ageMaxVal.addEventListener("input", function() {
+  var v = Math.min(Math.max(parseInt(this.value) || 0, 0), 556);
+  ageMaxInput.value = String(v);
+  updateOddzialFilter();
+});
 showLpInput.addEventListener("change", updateOddzialFilter);
 showNonLpInput.addEventListener("change", updateOddzialFilter);
 function restyleOddzialLayer() {
