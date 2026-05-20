@@ -79,7 +79,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19,
 var ODDZIAL_ZOOM = 11;
 
 var allLoadedFeatures = [];
-var forestLayer = L.geoJSON(null, { style: styleFeature });
+var forestLayer = L.geoJSON(null, { style: styleFeature }).addTo(map);
 var oddzialLayer = L.geoJSON(null, { style: styleOddzial });
 var layerByFeatureId = new Map();
 var filterToken = 0;
@@ -309,7 +309,7 @@ async function loadData() {
 
 function updateLayerByZoom() {
   var z = map.getZoom();
-  if (z < ODDZIAL_ZOOM) {
+  if (z >= ODDZIAL_ZOOM) {
     if (map.hasLayer(forestLayer)) map.removeLayer(forestLayer);
     if (!map.hasLayer(oddzialLayer)) oddzialLayer.addTo(map);
   } else {
