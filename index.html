@@ -148,6 +148,17 @@ function updateOldMarkers() {
   }
 }
 
+function getOldestAge(p) {
+  var list = p.species_list;
+  if (!list || !list.length) return Number(p.species_age);
+  var a = -1;
+  for (var i = 0; i < list.length; i++) {
+    var v = Number(list[i].a);
+    if (!isNaN(v) && v > a) a = v;
+  }
+  return a >= 0 ? a : Number(p.species_age);
+}
+
 function getFeatureAge(p) {
   if (colorMode === "oldest") return getOldestAge(p);
   var list = p.species_list;
