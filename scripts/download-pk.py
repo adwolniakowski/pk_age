@@ -7,7 +7,7 @@ import json, os, time, urllib.request, urllib.parse
 import topojson
 from collections import OrderedDict
 
-BBOX = (22.77, 52.90, 23.93, 53.66)  # W=Tykocin S=Siemianówka E=granica państwa N=Dąbrowa Białostocka
+BBOX = (22.92, 52.99, 23.93, 53.57)  # przycięte o 10km z N/S/W od oryginału
 MAX_RECORDS = 2000
 OUTPUT = os.path.join(os.path.dirname(__file__), "..", "pk-data.topojson")
 
