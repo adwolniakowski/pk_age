@@ -80,7 +80,7 @@ var allLoadedFeatures = [];
 var forestLayer = L.geoJSON(null, { style: styleFeature }).addTo(map);
 var layerByFeatureId = new Map();
 var filterToken = 0;
-var colorMode = "dominant";
+var colorMode = (document.querySelector('input[name="colorMode"]:checked') || {}).value || "dominant";
 
 var statusEl = document.getElementById("status");
 var opacityInput = document.getElementById("opacity");
