@@ -208,7 +208,7 @@ function tileStyle(props) {
 
 function initVectorGrid(fc) {
   if (vectorGrid) map.removeLayer(vectorGrid);
-  vectorGrid = L.vectorGrid.slicedGeoJSON(fc, {
+  vectorGrid = L.vectorGrid.slicer(fc, {
     rendererFactory: L.canvas.tile,
     vectorTileLayerStyles: { sliced: tileStyle },
     interactive: true,
@@ -217,8 +217,7 @@ function initVectorGrid(fc) {
   vectorGrid.on("click", function(e) {
     var lay = e.layer;
     var props = lay && (lay.properties || (lay.feature && lay.feature.properties));
-    if (!props) return;
-    L.popup().setLatLng(e.latlng).setContent(buildPopupContent(props)).openOn(map);
+    if (props) L.popup().setLatLng(e.latlng).setContent(buildPopupContent(props)).openOn(map);
   });
   vectorGrid.addTo(map);
 }
