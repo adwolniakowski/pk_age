@@ -76,8 +76,13 @@
 var map = L.map("map", { preferCanvas: true, zoomControl: true }).fitBounds([[52.86, 22.70], [53.70, 23.94]]);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
 
+var ODDZIAL_ZOOM = 11;
+
 var allLoadedFeatures = [];
-var forestLayer = L.geoJSON(null, { style: styleFeature }).addTo(map);
+var forestLayer = L.geoJSON(null, { style: styleFeature });
+var oddzialLayer = L.geoJSON(null, {
+  style: { fillColor: "#a6cee3", fillOpacity: 0.35, color: "#1f78b4", weight: 2, opacity: 0.8 }
+});
 var layerByFeatureId = new Map();
 var filterToken = 0;
 var colorMode = (document.querySelector('input[name="colorMode"]:checked') || {}).value || "dominant";
@@ -235,24 +240,40 @@ document.querySelectorAll('input[name="colorMode"]').forEach(function(el) {
 });
 
 // Popup through click on the geoJSON layer
-forestLayer.on("click", function(e) {
+function popupHandler(e) {
   var p = e.layer && e.layer.feature && e.layer.feature.properties;
   if (!p) return;
   L.popup().setLatLng(e.latlng).setContent(buildPopupContent(p)).openOn(map);
-});
+}
+forestLayer.on("click", popupHandler);
+oddzialLayer.on("click", popupHandler);
 
 loadData();
 
 async function loadData() {
-  setStatus("Wczytuję dane z pk-data.topojson…");
+  setStatus("Wczytuję dane…");
   try {
-    var resp = await fetch("pk-data.topojson");
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    var topo = await resp.json();
-    var fc = topojson.feature(topo, topo.objects.data);
+    var [respWydz, respOddz] = await Promise.all([
+      fetch("pk-data.topojson"),
+      fetch("pk-oddzialy.topojson")
+    ]);
+    if (!respWydz.ok) throw new Error("pk-data HTTP " + respWydz.status);
+
+    var [topoWydz, topoOddz] = await Promise.all([
+      respWydz.ok ? respWydz.json() : null,
+      respOddz.ok ? respOddz.json() : null
+    ]);
+
+    var fc = topojson.feature(topoWydz, topoWydz.objects.data);
     allLoadedFeatures = (fc.features || []).map(function(f, i) { f._localId = i; return f; });
 
-    // Chunked initial render
+    // Load oddziały (always visible at low zoom)
+    if (topoOddz) {
+      var fcOddz = topojson.feature(topoOddz, topoOddz.objects.data);
+      oddzialLayer.addData(fcOddz);
+    }
+
+    // Chunked render of wydzielenia
     var total = allLoadedFeatures.length;
     var i = 0;
     var chunkSize = 500;
@@ -268,7 +289,8 @@ async function loadData() {
         setTimeout(addChunk, 0);
       } else {
         initLayerMap();
-        applyFilter();
+        updateLayerByZoom();
+        if (map.hasLayer(forestLayer)) applyFilter();
       }
     }
     addChunk();
@@ -277,6 +299,18 @@ async function loadData() {
     setStatus("Błąd: " + err.message, true);
   }
 }
+
+function updateLayerByZoom() {
+  var z = map.getZoom();
+  if (z < ODDZIAL_ZOOM) {
+    if (map.hasLayer(forestLayer)) map.removeLayer(forestLayer);
+    if (!map.hasLayer(oddzialLayer)) oddzialLayer.addTo(map);
+  } else {
+    if (map.hasLayer(oddzialLayer)) map.removeLayer(oddzialLayer);
+    if (!map.hasLayer(forestLayer)) { forestLayer.addTo(map); applyFilter(); }
+  }
+}
+map.on("zoomend", updateLayerByZoom);
 
 function formatShare(s) {
   var n = parseInt(s, 10);
@@ -308,6 +342,14 @@ function getHighlightSpecies(p) {
 }
 
 function buildPopupContent(p) {
+  // Oddział layer (low zoom)
+  if (p.oddzial) {
+    return '<div class="popup-title">Oddział ' + escapeHtml(p.oddzial) + '</div>' +
+      '<table style="width:100%;margin-top:4px;font-size:12px">' +
+      '<tr><td class="muted">Wydzieleń:</td><td>' + p.count + '</td></tr>' +
+      '<tr><td colspan="2" style="padding-top:6px;color:#666;font-style:italic">Przybliż, aby zobaczyć szczegóły wydzieleń</td></tr>' +
+      '</table>';
+  }
   var list = p.species_list || [];
   var areaHa = Number.isFinite(Number(p.sub_area)) ? Number(p.sub_area).toFixed(2) : "b.d.";
   var highlight = getHighlightSpecies(p);
