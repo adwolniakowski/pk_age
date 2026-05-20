@@ -180,15 +180,13 @@ function updateStatus() {
 }
 
 opacityInput.addEventListener("input", function() {
-  var val = Number(this.value);
+  var val = Number(this.value), active = null;
   forestLayer.eachLayer(function(layer) {
     var f = layer.feature;
-    if (f) {
-      layer.options.fillOpacity = f._visible ? val : 0;
-    }
+    if (f) { layer.options.fillOpacity = f._visible ? val : 0; if (f._visible) active = layer; }
   });
-  var r = map._renderer;
-  if (r && r._redraw) r._redraw();
+  // Trigger Leaflet's redraw cycle via setStyle on one layer
+  if (active) active.setStyle({});
 });
 ageMinInput.addEventListener("input", rebuildLayer);
 ageMaxInput.addEventListener("input", rebuildLayer);
