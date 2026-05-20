@@ -164,7 +164,7 @@ function styleFeature(feature) {
   feature._ageColor = ac.color;
   return {
     fillColor: ac.color, fillOpacity: show ? Number(opacityInput.value) : 0,
-    color: ac.color, weight: 0.45, opacity: show ? 0.7 : 0
+    color: "#333", weight: 0.5, opacity: show ? 0.35 : 0
   };
 }
 
@@ -203,7 +203,7 @@ function applyFilter() {
         if (show) {
           layer.setStyle({
             fillColor: f._ageColor, fillOpacity: Number(opacityInput.value),
-            color: f._ageColor, weight: 0.45, opacity: 0.7
+            color: "#333", weight: 0.5, opacity: 0.35
           });
         } else {
           layer.setStyle({ fillOpacity: 0, opacity: 0 });
@@ -235,7 +235,7 @@ opacityInput.addEventListener("input", function() {
   var val = Number(this.value);
   forestLayer.eachLayer(function(layer) {
     var f = layer.feature;
-    if (f) layer.setStyle({fillOpacity: f._visible ? val : 0});
+    if (f) layer.setStyle({fillOpacity: f._visible ? val : 0, color: "#333", opacity: 0.35});
   });
   oddzialLayer.eachLayer(function(layer) {
     if (layer.feature) layer.setStyle({fillOpacity: val});
