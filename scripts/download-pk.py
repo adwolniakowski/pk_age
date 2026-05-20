@@ -7,7 +7,7 @@ import json, os, time, urllib.request, urllib.parse
 import topojson
 from collections import OrderedDict
 
-BBOX = (22.695, 52.90, 23.93, 53.705)  # powiększone o 5km na W i N od oryginału
+BBOX = (22.92, 52.99, 23.93, 53.57)  # oryginal przyciety o 10km z S, W, N; wschod bez zmian
 MAX_RECORDS = 2000
 OUTPUT = os.path.join(os.path.dirname(__file__), "..", "pk-data.topojson")
 
