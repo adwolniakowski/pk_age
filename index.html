@@ -78,6 +78,8 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19,
 
 var allLoadedFeatures = [];
 var forestLayer = L.geoJSON(null, { style: styleFeature }).addTo(map);
+var layerByFeatureId = new Map();
+var filterToken = 0;
 var colorMode = "dominant";
 
 var statusEl = document.getElementById("status");
@@ -146,37 +148,75 @@ function styleFeature(feature) {
   var p = feature.properties || {};
   var show = shouldShow(p);
   var ac = getFeatureAgeAndColor(p);
-  // Cache visibility for fast opacity updates
   feature._visible = show;
+  feature._ageColor = ac.color;
   return {
     fillColor: ac.color, fillOpacity: show ? Number(opacityInput.value) : 0,
     color: ac.color, weight: 0.45, opacity: show ? 0.7 : 0
   };
 }
 
-function rebuildLayer() {
-  forestLayer.clearLayers();
-  forestLayer.addData({ type: "FeatureCollection", features: allLoadedFeatures });
-  updateStatus();
-}
-
-function updateStatus() {
+function applyFilter() {
+  filterToken++;
+  var token = filterToken;
   var r = getAgeRange();
   var showLp = showLpInput.checked;
   var showNonLp = showNonLpInput.checked;
-  var visible = 0, total = allLoadedFeatures.length;
-  for (var i = 0; i < total; i++) {
-    var p = allLoadedFeatures[i].properties;
-    var lp = isLp(p);
-    if (!((showLp && lp) || (showNonLp && !lp))) continue;
-    var ac = getFeatureAgeAndColor(p);
-    if (Number.isFinite(ac.age) && ac.age >= r.minAge && ac.age <= r.maxAge) visible++;
+  var features = allLoadedFeatures;
+  var total = features.length;
+  var i = 0;
+  var chunkSize = 700;
+  var visible = 0;
+
+  function step() {
+    if (token !== filterToken) return;
+    var end = Math.min(i + chunkSize, total);
+    for (; i < end; i++) {
+      var f = features[i];
+      var p = f.properties;
+      var lp = isLp(p);
+      var show = (showLp && lp) || (showNonLp && !lp);
+      if (show) {
+        var ac = getFeatureAgeAndColor(p);
+        show = Number.isFinite(ac.age) && ac.age >= r.minAge && ac.age <= r.maxAge;
+        f._ageColor = ac.color;
+      } else {
+        f._ageColor = "#bdbdbd";
+      }
+      f._visible = show;
+      if (show) visible++;
+
+      var layer = layerByFeatureId.get(f._localId);
+      if (layer) {
+        if (show) {
+          layer.setStyle({
+            fillColor: f._ageColor, fillOpacity: Number(opacityInput.value),
+            color: f._ageColor, weight: 0.45, opacity: 0.7
+          });
+        } else {
+          layer.setStyle({ fillOpacity: 0, opacity: 0 });
+        }
+      }
+    }
+    if (i < total) {
+      setStatus("Filtruję… " + i + "/" + total);
+      setTimeout(step, 0);
+    } else {
+      var label = "Widoczne: " + visible + " z " + total;
+      if (!showLp) label += " (bez LP)";
+      if (!showNonLp) label += " (bez poza LP)";
+      label += ". " + (colorMode === "oldest" ? "Kolor wg NAJSTARSZEGO." : "Kolor wg DOMINUJĄCEGO.");
+      setStatus(label);
+    }
   }
-  var label = "Widoczne: " + visible + " z " + total;
-  if (!showLp) label += " (bez LP)";
-  if (!showNonLp) label += " (bez poza LP)";
-  label += ". " + (colorMode === "oldest" ? "Kolor wg NAJSTARSZEGO." : "Kolor wg DOMINUJĄCEGO.");
-  setStatus(label);
+  setTimeout(step, 0);
+}
+
+function initLayerMap() {
+  layerByFeatureId = new Map();
+  forestLayer.eachLayer(function(layer) {
+    if (layer.feature) layerByFeatureId.set(layer.feature._localId, layer);
+  });
 }
 
 opacityInput.addEventListener("input", function() {
@@ -186,12 +226,12 @@ opacityInput.addEventListener("input", function() {
     if (f) layer.setStyle({fillOpacity: f._visible ? val : 0});
   });
 });
-ageMinInput.addEventListener("input", rebuildLayer);
-ageMaxInput.addEventListener("input", rebuildLayer);
-showLpInput.addEventListener("change", rebuildLayer);
-showNonLpInput.addEventListener("change", rebuildLayer);
+ageMinInput.addEventListener("input", applyFilter);
+ageMaxInput.addEventListener("input", applyFilter);
+showLpInput.addEventListener("change", applyFilter);
+showNonLpInput.addEventListener("change", applyFilter);
 document.querySelectorAll('input[name="colorMode"]').forEach(function(el) {
-  el.addEventListener("change", function() { colorMode = el.value; rebuildLayer(); });
+  el.addEventListener("change", function() { colorMode = el.value; applyFilter(); });
 });
 
 // Popup through click on the geoJSON layer
@@ -211,7 +251,27 @@ async function loadData() {
     var topo = await resp.json();
     var fc = topojson.feature(topo, topo.objects.data);
     allLoadedFeatures = (fc.features || []).map(function(f, i) { f._localId = i; return f; });
-    rebuildLayer();
+
+    // Chunked initial render
+    var total = allLoadedFeatures.length;
+    var i = 0;
+    var chunkSize = 500;
+    forestLayer.clearLayers();
+    function addChunk() {
+      var end = Math.min(i + chunkSize, total);
+      var chunk = [];
+      for (var j = i; j < end; j++) chunk.push(allLoadedFeatures[j]);
+      forestLayer.addData({ type: "FeatureCollection", features: chunk });
+      i = end;
+      setStatus("Renderuję… " + i + "/" + total);
+      if (i < total) {
+        setTimeout(addChunk, 0);
+      } else {
+        initLayerMap();
+        applyFilter();
+      }
+    }
+    addChunk();
   } catch (err) {
     console.error(err);
     setStatus("Błąd: " + err.message, true);
