@@ -70,6 +70,9 @@
     <label class="small"><input id="showLp" type="checkbox" checked> Lasy Państwowe</label>
     <label class="small"><input id="showNonLp" type="checkbox" checked> Poza LP</label>
   </div>
+  <div class="row">
+    <label class="small"><input id="showOld" type="checkbox"> Pokaż najstarsze (≥200 lat)</label>
+  </div>
   <div id="status" class="status">Gotowe.</div>
 </div>
 <div class="legend"><div class="legend-title">Wiek [lata]</div><div class="scale"></div><div class="legend-labels"><span>0</span><span>40</span><span>80</span><span>120</span><span>160</span><span>200+</span></div></div>
@@ -95,15 +98,54 @@ var ageMaxVal = document.getElementById("ageMaxVal");
 var ageRangeLabel = document.getElementById("ageRangeLabel");
 var showLpInput = document.getElementById("showLp");
 var showNonLpInput = document.getElementById("showNonLp");
+var showOldInput = document.getElementById("showOld");
+var oldMarkers = L.layerGroup();
 
 function setStatus(text, isError) { statusEl.textContent = text; statusEl.className = "status" + (isError ? " error" : ""); }
 
-function getOldestAge(p) {
-  var list = p.species_list;
-  if (!list || !list.length) return Number(p.species_age);
-  var maxAge = -Infinity;
-  for (var i = 0; i < list.length; i++) { if (list[i].a != null && Number(list[i].a) > maxAge) maxAge = Number(list[i].a); }
-  return maxAge > -Infinity ? maxAge : Number(p.species_age);
+function getCentroid(geom) {
+  if (!geom) return null;
+  var coords;
+  if (geom.type === "Polygon") coords = geom.coordinates[0];
+  else if (geom.type === "MultiPolygon") coords = geom.coordinates[0][0];
+  else return null;
+  var sumX = 0, sumY = 0, n = 0;
+  for (var i = 0; i < coords.length; i++) {
+    if (i === coords.length - 1) continue; // skip repeated last
+    sumX += coords[i][0]; sumY += coords[i][1]; n++;
+  }
+  return n ? [sumY / n, sumX / n] : null;
+}
+
+function updateOldMarkers() {
+  oldMarkers.clearLayers();
+  if (map.hasLayer(oldMarkers)) map.removeLayer(oldMarkers);
+  if (!showOldInput.checked || !map.hasLayer(forestLayer)) return;
+  map.addLayer(oldMarkers);
+  var r = getAgeRange();
+  var showLp = showLpInput.checked;
+  var showNonLp = showNonLpInput.checked;
+  var count = 0;
+  for (var i = 0; i < allLoadedFeatures.length; i++) {
+    var f = allLoadedFeatures[i];
+    var p = f.properties;
+    var lp = isLp(p);
+    if (!(showLp && lp) && !(showNonLp && !lp)) continue;
+    var ac = getFeatureAgeAndColor(p);
+    if (!Number.isFinite(ac.age) || ac.age < r.minAge || ac.age > r.maxAge || ac.age < 200) continue;
+    var center = getCentroid(f.geometry);
+    if (center) {
+      L.circleMarker(center, {
+        radius: 4,
+        color: "#c00000",
+        fillColor: "#ff2020",
+        fillOpacity: 0.85,
+        weight: 1.5,
+        opacity: 0.9
+      }).addTo(oldMarkers);
+      count++;
+    }
+  }
 }
 
 function getFeatureAge(p) {
@@ -220,6 +262,7 @@ function applyFilter() {
       if (!showNonLp) label += " (bez poza LP)";
       label += ". " + (colorMode === "oldest" ? "Kolor wg NAJSTARSZEGO." : "Kolor wg DOMINUJĄCEGO.");
       setStatus(label);
+      updateOldMarkers();
     }
   }
   setTimeout(step, 0);
@@ -257,6 +300,7 @@ ageMaxVal.addEventListener("input", function() {
 });
 showLpInput.addEventListener("change", updateOddzialFilter);
 showNonLpInput.addEventListener("change", updateOddzialFilter);
+showOldInput.addEventListener("change", updateOldMarkers);
 function restyleOddzialLayer() {
   var r = getAgeRange();
   var showLp = showLpInput.checked;
@@ -354,6 +398,7 @@ function updateLayerByZoom() {
     if (map.hasLayer(oddzialLayer)) map.removeLayer(oddzialLayer);
     if (!map.hasLayer(forestLayer)) { forestLayer.addTo(map); applyFilter(); }
   }
+  updateOldMarkers();
 }
 map.on("zoomend", updateLayerByZoom);
 
