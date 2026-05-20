@@ -76,6 +76,8 @@
 var map = L.map("map", { preferCanvas: true, zoomControl: true }).fitBounds([[52.86, 22.70], [53.70, 23.94]]);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(map);
 
+var MIN_ZOOM_FOR_LAYER = 11;
+
 var allLoadedFeatures = [];
 var forestLayer = L.geoJSON(null, { style: styleFeature }).addTo(map);
 var layerByFeatureId = new Map();
@@ -212,6 +214,21 @@ function applyFilter() {
   setTimeout(step, 0);
 }
 
+function updateLayerByZoom() {
+  if (map.getZoom() < MIN_ZOOM_FOR_LAYER) {
+    if (map.hasLayer(forestLayer)) {
+      map.removeLayer(forestLayer);
+      setStatus("Przybliż, aby zobaczyć wydzielenia (zoom ≥ " + MIN_ZOOM_FOR_LAYER + ")");
+    }
+  } else {
+    if (!map.hasLayer(forestLayer)) {
+      forestLayer.addTo(map);
+      applyFilter();
+    }
+  }
+}
+map.on("zoomend", updateLayerByZoom);
+
 function initLayerMap() {
   layerByFeatureId = new Map();
   forestLayer.eachLayer(function(layer) {
@@ -268,7 +285,8 @@ async function loadData() {
         setTimeout(addChunk, 0);
       } else {
         initLayerMap();
-        applyFilter();
+        updateLayerByZoom();
+        if (map.hasLayer(forestLayer)) applyFilter();
       }
     }
     addChunk();
