@@ -311,7 +311,6 @@ function buildPopupContent(p) {
   var list = p.species_list || [];
   var areaHa = Number.isFinite(Number(p.sub_area)) ? Number(p.sub_area).toFixed(2) : "b.d.";
   var highlight = getHighlightSpecies(p);
-  var oldestSpecies = getOldestSpecies(p);
   var speciesHtml = "";
   if (list.length) {
     speciesHtml = '<table class="species-table"><tr><th>Gat.</th><th>Udział</th><th>Wiek</th></tr>';
@@ -333,8 +332,8 @@ function buildPopupContent(p) {
     (p.soil_subtype_cd ? '<tr><td class="muted">Gleba:</td><td>' + escapeHtml(p.soil_subtype_cd) + '</td></tr>' : "") +
     (p.moisture_name ? '<tr><td class="muted">Wilgotność:</td><td>' + escapeHtml(p.moisture_name) + '</td></tr>' : "") +
     (p.veg_cover_name ? '<tr><td class="muted">Pokrywa:</td><td>' + escapeHtml(p.veg_cover_name) + '</td></tr>' : "") +
-    (highlight ? '<tr><td class="muted">' + (colorMode === "oldest" ? "Najstarszy" : "Dominujący") + ':</td><td><b>' + escapeHtml(highlight.c) + '</b> (' + formatShare(highlight.s) + '%, wiek ' + highlight.a + ')</td></tr>' : "") +
-    (oldestSpecies && colorMode !== "oldest" ? '<tr><td class="muted">Najstarszy:</td><td><b>' + escapeHtml(oldestSpecies.c) + '</b> (' + formatShare(oldestSpecies.s) + '%, wiek ' + oldestSpecies.a + ')</td></tr>' : "") +
+    (getDominantSpecies(p) ? '<tr><td class="muted">Dominujący:</td><td><b>' + escapeHtml(getDominantSpecies(p).c) + '</b> (' + formatShare(getDominantSpecies(p).s) + '%, wiek ' + getDominantSpecies(p).a + ')</td></tr>' : "") +
+    (getOldestSpecies(p) ? '<tr><td class="muted">Najstarszy:</td><td><b>' + escapeHtml(getOldestSpecies(p).c) + '</b> (' + formatShare(getOldestSpecies(p).s) + '%, wiek ' + getOldestSpecies(p).a + ')</td></tr>' : "") +
     '</table>';
 }
 </script>
