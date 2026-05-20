@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Grupy wydzielenia LP po oddziale (Nadl-Obreb-Lesnictwo-Oddzial),
+"""Grupy wydzielen: LP po pierwszych 5 czesciach adresu
+(Nadl-Obreb-Lesnictwo-Oddzial-Wydzielenie), non-LP po pierwszych 3.
 unary_union + srednia wieku wazona powierzchnia (dominant + oldest).
 Zapisuje pk-oddzialy.topojson.
 """
@@ -39,10 +40,18 @@ def get_dominant_age(p):
     """Wiek gatunku dominujacego (najwiekszy udzial w species_list)."""
     sl = p.get("species_list") or []
     if sl:
-        best = max(sl, key=lambda s: int(s.get("s") or 0))
-        if best.get("a") is not None:
-            try: return float(best["a"])
-            except: pass
+        valid = []
+        for s in sl:
+            try:
+                share = int(s.get("s") or 0)
+                valid.append((share, s.get("a")))
+            except:
+                pass
+        if valid:
+            best = max(valid, key=lambda x: x[0])
+            if best[1] is not None:
+                try: return float(best[1])
+                except: pass
     fallback = p.get("species_age")
     if fallback:
         try: return float(fallback)
@@ -53,7 +62,11 @@ def get_oldest_age(p):
     """Najstarszy wiek z species_list lub species_age."""
     sl = p.get("species_list") or []
     if sl:
-        ages = [float(s["a"]) for s in sl if s.get("a") is not None]
+        ages = []
+        for s in sl:
+            if s.get("a") is not None:
+                try: ages.append(float(s["a"]))
+                except: pass
         if ages: return max(ages)
     return get_dominant_age(p)
 
@@ -81,9 +94,9 @@ for g in geometries:
         else:
             continue
     else:
-        # Poza LP: pierwsze 2 czesci (nr dzialki-oddzial)
-        if len(parts) >= 2:
-            key = "non-LP: " + "-".join(parts[:2])
+        # Poza LP: pierwsze 3 czesci (nr dzialki-oddzial-pododdzial)
+        if len(parts) >= 3:
+            key = "non-LP: " + "-".join(parts[:3])
         else:
             continue
     area = 0
