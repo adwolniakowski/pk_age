@@ -71,16 +71,18 @@ groups = defaultdict(list)
 
 for g in geometries:
     p = g["properties"]
-    addr = p.get("adress_forest", "")
-    parts = addr.split("-")
-    # Klucz: dla standardowego formatu lesnego (4+ cyfrowe czesci)
-    # uzywamy Nadl-Obreb-Lesnictwo-Oddzial, inaczej pierwsza czesc
-    if len(parts) >= 4 and parts[0].strip().isdigit():
-        key = "-".join(parts[i].strip() for i in range(4))
-    elif parts:
-        key = parts[0].strip()
+    owner = (p.get("owner_cat_name") or "").strip()
+    if not owner:
+        # LP: grupuj po adresie lesnym
+        addr = p.get("adress_forest", "")
+        parts = addr.split("-")
+        if len(parts) >= 4 and parts[0].strip().isdigit():
+            key = "-".join(parts[i].strip() for i in range(4))
+        else:
+            continue
     else:
-        continue
+        # Poza LP: grupuj po kategorii wlasciciela
+        key = "non-LP: " + owner
     area = 0
     try: area = float(p.get("sub_area") or 0)
     except: pass
@@ -121,6 +123,10 @@ for key, items in groups.items():
         continue
     if merged.geom_type == "MultiPolygon":
         merged = merged.buffer(1e-8, resolution=1)
+    # Uproszczenie dla grup pozalesnych
+    is_non_lp = key.startswith("non-LP:")
+    if is_non_lp:
+        merged = merged.simplify(0.003, preserve_topology=True)
     # Srednia wieku wazona powierzchnia
     total_area = sum(it["area"] for it in items)
     w_avg_dom = 0
