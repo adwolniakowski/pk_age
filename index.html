@@ -477,10 +477,11 @@ function buildPopupContent(p) {
   if (p.key) {
     var domAge = Number.isFinite(p.avg_age_dominant) ? p.avg_age_dominant + " lat" : "b.d.";
     var oldAge = Number.isFinite(p.max_age_oldest) ? p.max_age_oldest + " lat" : "b.d.";
-    return '<div class="popup-title">Oddział ' + escapeHtml(p.key) + '</div>' +
+    var keyDisplay = p.key.replace(/^non-LP:\s*/, '');
+    return '<div class="popup-title">Oddział ' + escapeHtml(keyDisplay) + '</div>' +
       '<table style="width:100%;margin-top:4px;font-size:12px">' +
       '<tr><td class="muted">Wydzieleń:</td><td>' + p.count + '</td></tr>' +
-      '<tr><td class="muted">Śr. wiek (dominant):</td><td>' + domAge + '</td></tr>' +
+      '<tr><td class="muted">Śr. wiek (dominujący):</td><td>' + domAge + '</td></tr>' +
       '<tr><td class="muted">Max wiek (najstarszy):</td><td>' + oldAge + '</td></tr>' +
       '<tr><td colspan="2" style="padding-top:6px;color:#666;font-style:italic">Przybliż, aby zobaczyć szczegóły wydzieleń</td></tr>' +
       '</table>';
