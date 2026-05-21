@@ -157,7 +157,7 @@ def main():
 
     # konwersja do TopoJSON z kwantyzacją
     print("Konwersja do TopoJSON (quantize=1e5)...")
-    topo = topojson.Topology(fc, prequantize=True, topology=False)
+    topo = topojson.Topology(fc, prequantize=5e4, topology=False)
     topo_obj = topo.to_json()
     if isinstance(topo_obj, str):
         topo_obj = json.loads(topo_obj)
